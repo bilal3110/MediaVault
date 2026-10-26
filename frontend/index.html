@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A browser-based dashboard for the FastAPI posts API."
+    />
+    <title>Post Registry</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <div id="app" v-cloak>
+      <header class="site-header">
+        <a
+          class="wordmark"
+          href="#"
+          @click.prevent="go(isAuthenticated ? 'posts' : 'login')"
+          >POST<br /><span>REGISTRY</span></a
+        >
+        <nav
+          v-if="isAuthenticated"
+          class="main-nav"
+          aria-label="Main navigation"
+        >
+          <button :class="{ active: view === 'posts' }" @click="go('posts')">
+            Posts
+          </button>
+          <button
+            :class="{ active: view === 'profile' }"
+            @click="go('profile')"
+          >
+            Profile
+          </button>
+        </nav>
+        <div v-if="isAuthenticated" class="account-strip">
+          <span>{{ user?.email || 'Loading account…' }}</span>
+          <button class="text-button" @click="logout" :disabled="busy.logout">
+            Sign out
+          </button>
+        </div>
+      </header>
+
+      <main class="page-shell">
+        <section
+          v-if="notice.message"
+          class="notice"
+          :class="notice.type"
+          role="status"
+        >
+          {{ notice.message }}
+          <button aria-label="Dismiss message" @click="notice.message = ''">
+            ×
+          </button>
+        </section>
+
+        <section v-if="view === 'login'" class="auth-layout">
+          <div class="auth-intro">
+            <p class="eyebrow">MEMBER ACCESS</p>
+            <h1>Your post archive,<br />under your control.</h1>
+            <p>Sign in to review, upload, and manage media records.</p>
+          </div>
+          <form class="form-panel" @submit.prevent="login" novalidate>
+            <h2>Sign in</h2>
+            <label
+              >Email
+              <input
+                v-model.trim="forms.login.email"
+                type="email"
+                autocomplete="email"
+                required
+            /></label>
+            <label
+              >Password
+              <input
+                v-model="forms.login.password"
+                type="password"
+                autocomplete="current-password"
+                required
+                minlength="3"
+            /></label>
+            <button class="button primary" :disabled="busy.login">
+              {{ busy.login ? 'Signing in…' : 'Sign in' }}
+            </button>
+            <p class="form-links">
+              <button type="button" class="text-button" @click="go('register')">
+                Create account</button
+              ><button type="button" class="text-button" @click="go('forgot')">
+                Forgot password?
+              </button>
+            </p>
+          </form>
+        </section>
+
+        <section v-else-if="view === 'register'" class="auth-layout">
+          <div class="auth-intro">
+            <p class="eyebrow">NEW ACCOUNT</p>
+            <h1>Start with a clean record.</h1>
+            <p>
+              Registration creates an account only. Sign in separately after it
+              succeeds.
+            </p>
+          </div>
+          <form class="form-panel" @submit.prevent="register" novalidate>
+            <h2>Create account</h2>
+            <label
+              >Email
+              <input
+                v-model.trim="forms.register.email"
+                type="email"
+                autocomplete="email"
+                required
+            /></label>
+            <label
+              >Password
+              <input
+                v-model="forms.register.password"
+                type="password"
+                autocomplete="new-password"
+                required
+                minlength="3"
+            /></label>
+            <label
+              >Confirm password
+              <input
+                v-model="forms.register.confirmPassword"
+                type="password"
+                autocomplete="new-password"
+                required
+            /></label>
+            <button class="button primary" :disabled="busy.register">
+              {{ busy.register ? 'Creating…' : 'Create account' }}
+            </button>
+            <p class="form-links">
+              <button type="button" class="text-button" @click="go('login')">
+                Back to sign in</button
+              ><button
+                type="button"
+                class="text-button"
+                @click="go('requestVerify')"
+              >
+                Verify an email
+              </button>
+            </p>
+          </form>
+        </section>
+
+        <section v-else-if="view === 'forgot'" class="compact-view">
+          <p class="eyebrow">ACCOUNT RECOVERY</p>
+          <h1>Request a password reset</h1>
+          <p class="section-copy">
+            Enter your email. For privacy, the same confirmation is shown
+            whether or not an account exists.
+          </p>
+          <form class="form-panel" @submit.prevent="forgotPassword">
+            <label
+              >Email
+              <input
+                v-model.trim="forms.forgot.email"
+                type="email"
+                required
+                autocomplete="email" /></label
+            ><button class="button primary" :disabled="busy.forgot">
+              {{ busy.forgot ? 'Sending…' : 'Request reset' }}</button
+            ><button type="button" class="text-button" @click="go('login')">
+              Back to sign in
+            </button>
+          </form>
+        </section>
+
+        <section v-else-if="view === 'reset'" class="compact-view">
+          <p class="eyebrow">ACCOUNT RECOVERY</p>
+          <h1>Choose a new password</h1>
+          <form class="form-panel" @submit.prevent="resetPassword">
+            <label
+              >Reset token
+              <textarea
+                v-model.trim="forms.reset.token"
+                required
+                rows="3"
+              ></textarea></label
+            ><label
+              >New password
+              <input
+                v-model="forms.reset.password"
+                type="password"
+                required
+                minlength="3"
+                autocomplete="new-password" /></label
+            ><button class="button primary" :disabled="busy.reset">
+              {{ busy.reset ? 'Updating…' : 'Reset password' }}
+            </button>
+          </form>
+        </section>
+
+        <section v-else-if="view === 'requestVerify'" class="compact-view">
+          <p class="eyebrow">EMAIL VERIFICATION</p>
+          <h1>Request a verification token</h1>
+          <form class="form-panel" @submit.prevent="requestVerification">
+            <label
+              >Email
+              <input
+                v-model.trim="forms.requestVerify.email"
+                type="email"
+                required
+                autocomplete="email" /></label
+            ><button class="button primary" :disabled="busy.requestVerify">
+              {{ busy.requestVerify ? 'Requesting…' : 'Request token' }}</button
+            ><button type="button" class="text-button" @click="go('verify')">
+              Already have a token?
+            </button>
+          </form>
+        </section>
+
+        <section v-else-if="view === 'verify'" class="compact-view">
+          <p class="eyebrow">EMAIL VERIFICATION</p>
+          <h1>Verify your email</h1>
+          <form class="form-panel" @submit.prevent="verifyEmail">
+            <label
+              >Verification token
+              <textarea
+                v-model.trim="forms.verify.token"
+                required
+                rows="3"
+              ></textarea></label
+            ><button class="button primary" :disabled="busy.verify">
+              {{ busy.verify ? 'Verifying…' : 'Verify email' }}
+            </button>
+          </form>
+        </section>
+
+        <section v-else-if="view === 'posts'" class="dashboard">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">MEDIA ARCHIVE</p>
+              <h1>Posts</h1>
+            </div>
+            <button
+              class="button secondary"
+              @click="loadPosts"
+              :disabled="busy.posts"
+            >
+              {{ busy.posts ? 'Refreshing…' : 'Refresh list' }}
+            </button>
+          </div>
+          <section class="upload-row" aria-labelledby="new-post-heading">
+            <div>
+              <p class="eyebrow">NEW ENTRY</p>
+              <h2 id="new-post-heading">Upload a post</h2>
+              <p>
+                Choose a file and add a caption. The API stores the media with
+                your account.
+              </p>
+            </div>
+            <form class="upload-form" @submit.prevent="createPost">
+              <label
+                >Caption
+                <input
+                  v-model.trim="forms.post.caption"
+                  required
+                  maxlength="1000" /></label
+              ><label>File <input ref="postFile" type="file" required /></label
+              ><button class="button primary" :disabled="busy.createPost">
+                {{ busy.createPost ? 'Uploading…' : 'Upload post' }}
+              </button>
+            </form>
+          </section>
+          <p v-if="busy.posts" class="state-line">Loading posts…</p>
+          <div v-else-if="!posts.length" class="empty-state">
+            <h2>No posts yet</h2>
+            <p>Upload the first item to start this archive.</p>
+          </div>
+          <div v-else class="post-list">
+            <article v-for="post in posts" :key="post.id" class="post-row">
+              <a
+                class="media-thumb"
+                :href="post.url"
+                target="_blank"
+                rel="noopener"
+                ><img
+                  v-if="isImage(post)"
+                  :src="post.url"
+                  :alt="post.caption || post.file_name || 'Post media'"
+                /><span v-else>{{ post.file_type || 'FILE' }}</span></a
+              >
+              <div class="post-copy">
+                <p class="post-caption">
+                  {{ post.caption || 'Untitled post' }}
+                </p>
+                <p class="post-meta">
+                  {{ post.email }} · {{ formatDate(post.created_at) }}
+                </p>
+                <p class="post-file">
+                  {{ post.file_name || 'Original filename unavailable' }}
+                </p>
+              </div>
+              <div class="post-actions">
+                <span v-if="post.is_owner" class="ownership">YOUR POST</span
+                ><button
+                  v-if="post.is_owner"
+                  class="text-button danger"
+                  @click="deletePost(post)"
+                  :disabled="busy.deleting === post.id"
+                >
+                  {{ busy.deleting === post.id ? 'Deleting…' : 'Delete' }}
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section
+          v-else-if="view === 'profile'"
+          class="compact-view profile-view"
+        >
+          <p class="eyebrow">ACCOUNT SETTINGS</p>
+          <h1>Your profile</h1>
+          <p v-if="busy.profile" class="state-line">Loading profile…</p>
+          <form v-else class="form-panel" @submit.prevent="updateProfile">
+            <label
+              >Email
+              <input
+                v-model.trim="forms.profile.email"
+                type="email"
+                required
+                autocomplete="email" /></label
+            ><label
+              >New password
+              <input
+                v-model="forms.profile.password"
+                type="password"
+                minlength="3"
+                autocomplete="new-password"
+              /><small>Leave blank to keep the current password.</small></label
+            >
+            <dl class="account-data">
+              <div>
+                <dt>Account ID</dt>
+                <dd>{{ user?.id }}</dd>
+              </div>
+              <div>
+                <dt>Verification</dt>
+                <dd>{{ user?.is_verified ? 'Verified' : 'Not verified' }}</dd>
+              </div>
+            </dl>
+            <button class="button primary" :disabled="busy.updateProfile">
+              {{ busy.updateProfile ? 'Saving…' : 'Save changes' }}
+            </button>
+          </form>
+        </section>
+      </main>
+    </div>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
